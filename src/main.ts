@@ -1,7 +1,8 @@
 import {
-  parseAssFile,
-  rebuildAssFile,
-  extractTextsForTranslation,
+  parseSubtitle,
+  rebuildSubtitle,
+  extractTexts,
+  getFormatFromExtension,
 } from "./parser";
 import { translateBatch } from "./translator";
 import { readFile, writeFile, fileExists } from "./utils";
@@ -19,21 +20,22 @@ async function main(): Promise<void> {
   }
 
   const content = readFile(config.inputFile);
-  console.log("Parsing ASS file...");
+  const format = getFormatFromExtension(config.inputFile);
+  console.log(`Parsing ${format.toUpperCase()} file...`);
 
-  const parsed = parseAssFile(content);
-  console.log(`Found ${parsed.events.dialogues.length} dialogue lines`);
+  const parsed = parseSubtitle(content, format);
+  console.log(`Found ${parsed.entries.length} subtitle entries`);
 
-  const texts = extractTextsForTranslation(parsed.events.dialogues);
+  const texts = extractTexts(parsed);
   console.log("Starting translation...");
 
   const translatedTexts = await translateBatch(texts, config.targetLanguage);
 
-  for (let i = 0; i < parsed.events.dialogues.length; i++) {
-    parsed.events.dialogues[i].translatedText = translatedTexts[i];
+  for (let i = 0; i < parsed.entries.length; i++) {
+    parsed.entries[i].translatedText = translatedTexts[i];
   }
 
-  const output = rebuildAssFile(parsed);
+  const output = rebuildSubtitle(parsed);
   writeFile(config.outputFile, output);
 
   console.log("---");

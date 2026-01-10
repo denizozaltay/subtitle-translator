@@ -1,26 +1,18 @@
-export interface DialogueLine {
-  rawLine: string;
-  layer: string;
-  start: string;
-  end: string;
-  style: string;
-  name: string;
-  marginL: string;
-  marginR: string;
-  marginV: string;
-  effect: string;
+export type SubtitleFormat = "ass" | "srt";
+
+export interface SubtitleEntry {
+  index: number;
+  startTime: string;
+  endTime: string;
   text: string;
   translatedText?: string;
+  rawData?: Record<string, string>;
 }
 
 export interface ParsedSubtitle {
-  scriptInfo: string[];
-  styles: string[];
-  events: {
-    formatLine: string;
-    dialogues: DialogueLine[];
-    otherLines: string[];
-  };
+  format: SubtitleFormat;
+  entries: SubtitleEntry[];
+  metadata: string[];
 }
 
 export interface TranslationResult {

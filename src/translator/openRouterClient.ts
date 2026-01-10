@@ -111,12 +111,25 @@ export async function translateBatch(
     await delay(config.delayMs);
   }
 
+  if (results.length > 0) {
+    console.log("\nPhase 2: Reviewing and revising warmup translations...");
+    const revisedPairs = await reviseWarmupTranslations(
+      translationPairs,
+      targetLanguage
+    );
+
+    for (let i = 0; i < revisedPairs.length; i++) {
+      results[i] = revisedPairs[i].translated;
+      translationPairs[i] = revisedPairs[i];
+    }
+  }
+
   if (texts.length <= config.warmupCount) {
     return results;
   }
 
   console.log(
-    `\nPhase 2: Batch translating remaining ${
+    `\nPhase 3: Batch translating remaining ${
       texts.length - config.warmupCount
     } lines (${config.batchSize} at a time with previous ${
       config.batchSize
@@ -158,6 +171,52 @@ export async function translateBatch(
   }
 
   return results;
+}
+
+async function reviseWarmupTranslations(
+  pairs: TranslationPair[],
+  targetLanguage: string
+): Promise<TranslationPair[]> {
+  const systemPrompt = buildRevisionSystemPrompt(targetLanguage);
+  const userPrompt = buildRevisionUserPrompt(pairs);
+
+  const content = await callApi(systemPrompt, userPrompt);
+  const revisedTranslations = parseBatchResponse(content, pairs.length);
+
+  return pairs.map((pair, i) => ({
+    original: pair.original,
+    translated: revisedTranslations[i] || pair.translated,
+  }));
+}
+
+function buildRevisionSystemPrompt(targetLanguage: string): string {
+  return `You are a professional anime subtitle translator and editor. Review and revise translations to ${targetLanguage}.
+
+Your task:
+- Review each translation for accuracy, naturalness, and consistency
+- Fix any awkward phrasing, mistranslations, or inconsistencies
+- Ensure the tone matches anime dialogue style
+- Preserve formatting codes: \\N (line break), {\\i1}, {\\i0}, {\\pos(x,y)}, and other ASS style tags
+- Keep character names unchanged
+- If a translation is already good, keep it as is
+
+Output format:
+- Return ONLY the revised translations, one per line
+- Each output line corresponds to the input line with the same number
+- Do not include line numbers, explanations, or any extra text`;
+}
+
+function buildRevisionUserPrompt(pairs: TranslationPair[]): string {
+  const pairsStr = pairs
+    .map(
+      (pair, i) =>
+        `${i + 1}. Original: ${pair.original}\n   Translation: ${
+          pair.translated
+        }`
+    )
+    .join("\n\n");
+
+  return `Review these ${pairs.length} translations. If any need improvement, fix them. Return the final version of each translation:\n\n${pairsStr}`;
 }
 
 function buildSystemPromptWithContext(targetLanguage: string): string {

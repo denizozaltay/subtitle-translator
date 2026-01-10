@@ -1,6 +1,6 @@
 export const config = {
-  inputFile: "subtitle.ass",
-  outputFile: "subtitle_tr.ass",
+  inputFile: "subtitle.srt",
+  outputFile: "subtitle_tr.srt",
   targetLanguage: "Turkish",
 
   warmupCount: 10,

@@ -1,20 +1,18 @@
-import { DialogueLine, ParsedSubtitle } from "../types/subtitle";
+import { ParsedSubtitle, SubtitleEntry } from "../types/subtitle";
 
 export function parseAssFile(content: string): ParsedSubtitle {
   const lines = content.split("\n");
-  const scriptInfo: string[] = [];
-  const styles: string[] = [];
-  const dialogues: DialogueLine[] = [];
-  const otherLines: string[] = [];
-  let formatLine = "";
+  const metadata: string[] = [];
+  const entries: SubtitleEntry[] = [];
   let currentSection = "";
+  let entryIndex = 0;
 
   for (const line of lines) {
     const trimmedLine = line.trim();
 
     if (trimmedLine.startsWith("[Script Info]")) {
       currentSection = "scriptInfo";
-      scriptInfo.push(line);
+      metadata.push(line);
       continue;
     }
 
@@ -23,50 +21,40 @@ export function parseAssFile(content: string): ParsedSubtitle {
       trimmedLine.startsWith("[V4 Styles]")
     ) {
       currentSection = "styles";
-      styles.push(line);
+      metadata.push(line);
       continue;
     }
 
     if (trimmedLine.startsWith("[Events]")) {
       currentSection = "events";
-      otherLines.push(line);
+      metadata.push(line);
       continue;
     }
 
-    switch (currentSection) {
-      case "scriptInfo":
-        scriptInfo.push(line);
-        break;
-      case "styles":
-        styles.push(line);
-        break;
-      case "events":
-        if (trimmedLine.startsWith("Format:")) {
-          formatLine = line;
-        } else if (trimmedLine.startsWith("Dialogue:")) {
-          const dialogue = parseDialogueLine(line);
-          if (dialogue) {
-            dialogues.push(dialogue);
-          }
-        } else {
-          otherLines.push(line);
+    if (currentSection === "events") {
+      if (trimmedLine.startsWith("Format:")) {
+        metadata.push(line);
+      } else if (trimmedLine.startsWith("Dialogue:")) {
+        const entry = parseDialogueLine(line, entryIndex++);
+        if (entry) {
+          entries.push(entry);
         }
-        break;
+      } else {
+        metadata.push(line);
+      }
+    } else {
+      metadata.push(line);
     }
   }
 
   return {
-    scriptInfo,
-    styles,
-    events: {
-      formatLine,
-      dialogues,
-      otherLines,
-    },
+    format: "ass",
+    entries,
+    metadata,
   };
 }
 
-function parseDialogueLine(line: string): DialogueLine | null {
+function parseDialogueLine(line: string, index: number): SubtitleEntry | null {
   const dialoguePrefix = "Dialogue:";
   if (!line.trim().startsWith(dialoguePrefix)) {
     return null;
@@ -81,57 +69,40 @@ function parseDialogueLine(line: string): DialogueLine | null {
     return null;
   }
 
-  const layer = parts[0];
-  const start = parts[1];
-  const end = parts[2];
-  const style = parts[3];
-  const name = parts[4];
-  const marginL = parts[5];
-  const marginR = parts[6];
-  const marginV = parts[7];
-  const effect = parts[8];
-  const text = parts.slice(9).join(",");
-
   return {
-    rawLine: line,
-    layer,
-    start,
-    end,
-    style,
-    name,
-    marginL,
-    marginR,
-    marginV,
-    effect,
-    text,
+    index,
+    startTime: parts[1],
+    endTime: parts[2],
+    text: parts.slice(9).join(","),
+    rawData: {
+      layer: parts[0],
+      style: parts[3],
+      name: parts[4],
+      marginL: parts[5],
+      marginR: parts[6],
+      marginV: parts[7],
+      effect: parts[8],
+    },
   };
 }
 
 export function rebuildAssFile(parsed: ParsedSubtitle): string {
   const lines: string[] = [];
+  let entryIndex = 0;
 
-  lines.push(...parsed.scriptInfo);
-  lines.push(...parsed.styles);
-  lines.push("[Events]");
-  lines.push(parsed.events.formatLine);
+  for (const line of parsed.metadata) {
+    lines.push(line);
 
-  for (const dialogue of parsed.events.dialogues) {
-    const text = dialogue.translatedText ?? dialogue.text;
-    const rebuiltLine = `Dialogue: ${dialogue.layer},${dialogue.start},${dialogue.end},${dialogue.style},${dialogue.name},${dialogue.marginL},${dialogue.marginR},${dialogue.marginV},${dialogue.effect},${text}`;
-    lines.push(rebuiltLine);
-  }
-
-  for (const otherLine of parsed.events.otherLines) {
-    if (!otherLine.trim().startsWith("[Events]")) {
-      lines.push(otherLine);
+    if (line.trim().startsWith("Format:") && line.includes("Text")) {
+      for (const entry of parsed.entries) {
+        const raw = entry.rawData!;
+        const text = entry.translatedText ?? entry.text;
+        const rebuiltLine = `Dialogue: ${raw.layer},${entry.startTime},${entry.endTime},${raw.style},${raw.name},${raw.marginL},${raw.marginR},${raw.marginV},${raw.effect},${text}`;
+        lines.push(rebuiltLine);
+        entryIndex++;
+      }
     }
   }
 
   return lines.join("\n");
-}
-
-export function extractTextsForTranslation(
-  dialogues: DialogueLine[]
-): string[] {
-  return dialogues.map((d) => d.text);
 }
