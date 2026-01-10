@@ -1,1 +1,1 @@
-export { translateText, translateBatch } from "./openRouterClient";
+export { translateBatch } from "./openRouterClient";

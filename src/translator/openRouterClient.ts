@@ -2,6 +2,7 @@ import axios from "axios";
 
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 const MODEL = "google/gemini-3-flash-preview";
+const BATCH_SIZE = 5;
 
 interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -18,10 +19,10 @@ interface OpenRouterResponse {
   }[];
 }
 
-export async function translateText(
-  text: string,
+async function translateChunk(
+  texts: string[],
   targetLanguage: string
-): Promise<string> {
+): Promise<string[]> {
   const apiKey = process.env.OPENROUTER_API_KEY;
 
   if (!apiKey) {
@@ -29,7 +30,7 @@ export async function translateText(
   }
 
   const systemPrompt = buildSystemPrompt(targetLanguage);
-  const userPrompt = buildUserPrompt(text);
+  const userPrompt = buildBatchUserPrompt(texts);
 
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
@@ -51,7 +52,8 @@ export async function translateText(
     }
   );
 
-  return response.data.choices[0].message.content.trim();
+  const content = response.data.choices[0].message.content.trim();
+  return parseBatchResponse(content, texts.length);
 }
 
 export async function translateBatch(
@@ -59,36 +61,64 @@ export async function translateBatch(
   targetLanguage: string
 ): Promise<string[]> {
   const results: string[] = [];
+  const totalBatches = Math.ceil(texts.length / BATCH_SIZE);
 
-  for (let i = 0; i < texts.length; i++) {
-    const text = texts[i];
+  for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+    const chunk = texts.slice(i, i + BATCH_SIZE);
+    const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
+
     console.log(
-      `Translating ${i + 1}/${texts.length}: ${text.substring(0, 50)}...`
+      `Translating batch ${batchNumber}/${totalBatches} (lines ${
+        i + 1
+      }-${Math.min(i + BATCH_SIZE, texts.length)})`
     );
 
-    const translated = await translateText(text, targetLanguage);
-    results.push(translated);
+    const translatedChunk = await translateChunk(chunk, targetLanguage);
+    results.push(...translatedChunk);
 
-    await delay(500);
+    await delay(300);
   }
 
   return results;
 }
 
 function buildSystemPrompt(targetLanguage: string): string {
-  return `You are a professional anime subtitle translator. Your task is to translate subtitle lines to ${targetLanguage}.
+  return `You are a professional anime subtitle translator. Translate subtitle lines to ${targetLanguage}.
 
 Rules:
-- Translate naturally and fluently for the target language
-- Preserve formatting codes like \\N (line break), {\\i1}, {\\i0}, {\\pos(x,y)}, and other ASS style tags
+- Translate each line naturally and fluently
+- Preserve formatting codes: \\N (line break), {\\i1}, {\\i0}, {\\pos(x,y)}, and other ASS style tags
 - Keep character names unchanged unless they have official localized versions
 - Maintain the emotional tone and context of anime dialogue
-- Do not add explanations or notes, only provide the translation
-- If the text contains only formatting codes or is empty, return it unchanged`;
+- If a line contains only formatting codes or is empty, return it unchanged
+
+Output format:
+- Return ONLY the translations, one per line
+- Each output line corresponds to the input line with the same number
+- Do not include line numbers, explanations, or any extra text`;
 }
 
-function buildUserPrompt(text: string): string {
-  return `Translate this subtitle line:\n${text}`;
+function buildBatchUserPrompt(texts: string[]): string {
+  const numbered = texts.map((text, i) => `${i + 1}. ${text}`).join("\n");
+  return `Translate these ${texts.length} subtitle lines:\n\n${numbered}`;
+}
+
+function parseBatchResponse(content: string, expectedCount: number): string[] {
+  const lines = content.split("\n").filter((line) => line.trim() !== "");
+  const results: string[] = [];
+
+  for (const line of lines) {
+    const cleaned = line.replace(/^\d+\.\s*/, "").trim();
+    if (cleaned) {
+      results.push(cleaned);
+    }
+  }
+
+  while (results.length < expectedCount) {
+    results.push("");
+  }
+
+  return results.slice(0, expectedCount);
 }
 
 function delay(ms: number): Promise<void> {
