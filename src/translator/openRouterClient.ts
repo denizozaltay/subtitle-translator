@@ -2,7 +2,8 @@ import axios from "axios";
 
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 const MODEL = "google/gemini-3-flash-preview";
-const BATCH_SIZE = 5;
+const WARMUP_COUNT = 10;
+const BATCH_SIZE = 10;
 
 interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -19,18 +20,20 @@ interface OpenRouterResponse {
   }[];
 }
 
-async function translateChunk(
-  texts: string[],
-  targetLanguage: string
-): Promise<string[]> {
+interface TranslationPair {
+  original: string;
+  translated: string;
+}
+
+async function callApi(
+  systemPrompt: string,
+  userPrompt: string
+): Promise<string> {
   const apiKey = process.env.OPENROUTER_API_KEY;
 
   if (!apiKey) {
     throw new Error("OPENROUTER_API_KEY is not set in environment variables");
   }
-
-  const systemPrompt = buildSystemPrompt(targetLanguage);
-  const userPrompt = buildBatchUserPrompt(texts);
 
   const messages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
@@ -52,7 +55,29 @@ async function translateChunk(
     }
   );
 
-  const content = response.data.choices[0].message.content.trim();
+  return response.data.choices[0].message.content.trim();
+}
+
+async function translateSingleWithContext(
+  text: string,
+  targetLanguage: string,
+  context: TranslationPair[]
+): Promise<string> {
+  const systemPrompt = buildSystemPromptWithContext(targetLanguage);
+  const userPrompt = buildSinglePromptWithContext(text, context);
+
+  return await callApi(systemPrompt, userPrompt);
+}
+
+async function translateBatchWithContext(
+  texts: string[],
+  targetLanguage: string,
+  context: TranslationPair[]
+): Promise<string[]> {
+  const systemPrompt = buildSystemPromptWithContext(targetLanguage);
+  const userPrompt = buildBatchPromptWithContext(texts, context);
+
+  const content = await callApi(systemPrompt, userPrompt);
   return parseBatchResponse(content, texts.length);
 }
 
@@ -61,20 +86,69 @@ export async function translateBatch(
   targetLanguage: string
 ): Promise<string[]> {
   const results: string[] = [];
-  const totalBatches = Math.ceil(texts.length / BATCH_SIZE);
+  const translationPairs: TranslationPair[] = [];
 
-  for (let i = 0; i < texts.length; i += BATCH_SIZE) {
-    const chunk = texts.slice(i, i + BATCH_SIZE);
-    const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
+  console.log(
+    `Phase 1: Warming up with first ${Math.min(
+      WARMUP_COUNT,
+      texts.length
+    )} lines (one by one with growing context)`
+  );
 
+  for (let i = 0; i < Math.min(WARMUP_COUNT, texts.length); i++) {
+    const text = texts[i];
     console.log(
-      `Translating batch ${batchNumber}/${totalBatches} (lines ${
-        i + 1
-      }-${Math.min(i + BATCH_SIZE, texts.length)})`
+      `  Translating ${i + 1}/${WARMUP_COUNT}: ${text.substring(0, 40)}...`
     );
 
-    const translatedChunk = await translateChunk(chunk, targetLanguage);
-    results.push(...translatedChunk);
+    const translated = await translateSingleWithContext(
+      text,
+      targetLanguage,
+      translationPairs
+    );
+    results.push(translated);
+    translationPairs.push({ original: text, translated });
+
+    await delay(300);
+  }
+
+  if (texts.length <= WARMUP_COUNT) {
+    return results;
+  }
+
+  console.log(
+    `\nPhase 2: Batch translating remaining ${
+      texts.length - WARMUP_COUNT
+    } lines (${BATCH_SIZE} at a time with previous ${BATCH_SIZE} as context)`
+  );
+
+  const remainingTexts = texts.slice(WARMUP_COUNT);
+  const totalBatches = Math.ceil(remainingTexts.length / BATCH_SIZE);
+
+  for (let i = 0; i < remainingTexts.length; i += BATCH_SIZE) {
+    const chunk = remainingTexts.slice(i, i + BATCH_SIZE);
+    const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
+    const globalStart = WARMUP_COUNT + i + 1;
+    const globalEnd = Math.min(WARMUP_COUNT + i + BATCH_SIZE, texts.length);
+
+    console.log(
+      `  Batch ${batchNumber}/${totalBatches} (lines ${globalStart}-${globalEnd})`
+    );
+
+    const contextWindow = translationPairs.slice(-BATCH_SIZE);
+    const translatedChunk = await translateBatchWithContext(
+      chunk,
+      targetLanguage,
+      contextWindow
+    );
+
+    for (let j = 0; j < chunk.length; j++) {
+      results.push(translatedChunk[j]);
+      translationPairs.push({
+        original: chunk[j],
+        translated: translatedChunk[j],
+      });
+    }
 
     await delay(300);
   }
@@ -82,25 +156,48 @@ export async function translateBatch(
   return results;
 }
 
-function buildSystemPrompt(targetLanguage: string): string {
+function buildSystemPromptWithContext(targetLanguage: string): string {
   return `You are a professional anime subtitle translator. Translate subtitle lines to ${targetLanguage}.
 
 Rules:
-- Translate each line naturally and fluently
+- Translate naturally and fluently, maintaining consistency with previous translations
 - Preserve formatting codes: \\N (line break), {\\i1}, {\\i0}, {\\pos(x,y)}, and other ASS style tags
 - Keep character names unchanged unless they have official localized versions
 - Maintain the emotional tone and context of anime dialogue
 - If a line contains only formatting codes or is empty, return it unchanged
-
-Output format:
-- Return ONLY the translations, one per line
-- Each output line corresponds to the input line with the same number
-- Do not include line numbers, explanations, or any extra text`;
+- Use the provided context to maintain translation consistency (same terms, style, tone)`;
 }
 
-function buildBatchUserPrompt(texts: string[]): string {
+function buildSinglePromptWithContext(
+  text: string,
+  context: TranslationPair[]
+): string {
+  if (context.length === 0) {
+    return `Translate this subtitle line:\n${text}`;
+  }
+
+  const contextStr = context
+    .map(
+      (pair) => `Original: ${pair.original}\nTranslation: ${pair.translated}`
+    )
+    .join("\n\n");
+
+  return `Previous translations for context:\n${contextStr}\n\nNow translate this line (return ONLY the translation, no explanations):\n${text}`;
+}
+
+function buildBatchPromptWithContext(
+  texts: string[],
+  context: TranslationPair[]
+): string {
+  const contextStr = context
+    .map(
+      (pair) => `Original: ${pair.original}\nTranslation: ${pair.translated}`
+    )
+    .join("\n\n");
+
   const numbered = texts.map((text, i) => `${i + 1}. ${text}`).join("\n");
-  return `Translate these ${texts.length} subtitle lines:\n\n${numbered}`;
+
+  return `Previous translations for context:\n${contextStr}\n\nNow translate these ${texts.length} lines. Return ONLY the translations, one per line, no line numbers:\n\n${numbered}`;
 }
 
 function parseBatchResponse(content: string, expectedCount: number): string[] {
