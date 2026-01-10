@@ -5,23 +5,20 @@ import {
 } from "./parser";
 import { translateBatch } from "./translator";
 import { readFile, writeFile, fileExists } from "./utils";
-
-const INPUT_FILE = "subtitle.ass";
-const OUTPUT_FILE = "subtitle_tr.ass";
-const TARGET_LANGUAGE = "Turkish";
+import { config } from "./config";
 
 async function main(): Promise<void> {
-  console.log(`Input: ${INPUT_FILE}`);
-  console.log(`Output: ${OUTPUT_FILE}`);
-  console.log(`Target Language: ${TARGET_LANGUAGE}`);
+  console.log(`Input: ${config.inputFile}`);
+  console.log(`Output: ${config.outputFile}`);
+  console.log(`Target Language: ${config.targetLanguage}`);
   console.log("---");
 
-  if (!fileExists(INPUT_FILE)) {
-    console.error(`Input file not found: ${INPUT_FILE}`);
+  if (!fileExists(config.inputFile)) {
+    console.error(`Input file not found: ${config.inputFile}`);
     process.exit(1);
   }
 
-  const content = readFile(INPUT_FILE);
+  const content = readFile(config.inputFile);
   console.log("Parsing ASS file...");
 
   const parsed = parseAssFile(content);
@@ -30,17 +27,17 @@ async function main(): Promise<void> {
   const texts = extractTextsForTranslation(parsed.events.dialogues);
   console.log("Starting translation...");
 
-  const translatedTexts = await translateBatch(texts, TARGET_LANGUAGE);
+  const translatedTexts = await translateBatch(texts, config.targetLanguage);
 
   for (let i = 0; i < parsed.events.dialogues.length; i++) {
     parsed.events.dialogues[i].translatedText = translatedTexts[i];
   }
 
   const output = rebuildAssFile(parsed);
-  writeFile(OUTPUT_FILE, output);
+  writeFile(config.outputFile, output);
 
   console.log("---");
-  console.log(`Translation complete! Output saved to: ${OUTPUT_FILE}`);
+  console.log(`Translation complete! Output saved to: ${config.outputFile}`);
 }
 
 main().catch((error) => {

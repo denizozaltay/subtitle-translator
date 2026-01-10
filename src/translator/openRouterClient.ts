@@ -1,9 +1,5 @@
 import axios from "axios";
-
-const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
-const MODEL = "google/gemini-3-flash-preview";
-const WARMUP_COUNT = 10;
-const BATCH_SIZE = 10;
+import { config } from "../config";
 
 interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -41,9 +37,9 @@ async function callApi(
   ];
 
   const response = await axios.post<OpenRouterResponse>(
-    OPENROUTER_API_URL,
+    config.apiUrl,
     {
-      model: MODEL,
+      model: config.model,
       messages,
       reasoning: { enabled: true },
     },
@@ -90,15 +86,18 @@ export async function translateBatch(
 
   console.log(
     `Phase 1: Warming up with first ${Math.min(
-      WARMUP_COUNT,
+      config.warmupCount,
       texts.length
     )} lines (one by one with growing context)`
   );
 
-  for (let i = 0; i < Math.min(WARMUP_COUNT, texts.length); i++) {
+  for (let i = 0; i < Math.min(config.warmupCount, texts.length); i++) {
     const text = texts[i];
     console.log(
-      `  Translating ${i + 1}/${WARMUP_COUNT}: ${text.substring(0, 40)}...`
+      `  Translating ${i + 1}/${config.warmupCount}: ${text.substring(
+        0,
+        40
+      )}...`
     );
 
     const translated = await translateSingleWithContext(
@@ -109,33 +108,38 @@ export async function translateBatch(
     results.push(translated);
     translationPairs.push({ original: text, translated });
 
-    await delay(300);
+    await delay(config.delayMs);
   }
 
-  if (texts.length <= WARMUP_COUNT) {
+  if (texts.length <= config.warmupCount) {
     return results;
   }
 
   console.log(
     `\nPhase 2: Batch translating remaining ${
-      texts.length - WARMUP_COUNT
-    } lines (${BATCH_SIZE} at a time with previous ${BATCH_SIZE} as context)`
+      texts.length - config.warmupCount
+    } lines (${config.batchSize} at a time with previous ${
+      config.batchSize
+    } as context)`
   );
 
-  const remainingTexts = texts.slice(WARMUP_COUNT);
-  const totalBatches = Math.ceil(remainingTexts.length / BATCH_SIZE);
+  const remainingTexts = texts.slice(config.warmupCount);
+  const totalBatches = Math.ceil(remainingTexts.length / config.batchSize);
 
-  for (let i = 0; i < remainingTexts.length; i += BATCH_SIZE) {
-    const chunk = remainingTexts.slice(i, i + BATCH_SIZE);
-    const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
-    const globalStart = WARMUP_COUNT + i + 1;
-    const globalEnd = Math.min(WARMUP_COUNT + i + BATCH_SIZE, texts.length);
+  for (let i = 0; i < remainingTexts.length; i += config.batchSize) {
+    const chunk = remainingTexts.slice(i, i + config.batchSize);
+    const batchNumber = Math.floor(i / config.batchSize) + 1;
+    const globalStart = config.warmupCount + i + 1;
+    const globalEnd = Math.min(
+      config.warmupCount + i + config.batchSize,
+      texts.length
+    );
 
     console.log(
       `  Batch ${batchNumber}/${totalBatches} (lines ${globalStart}-${globalEnd})`
     );
 
-    const contextWindow = translationPairs.slice(-BATCH_SIZE);
+    const contextWindow = translationPairs.slice(-config.batchSize);
     const translatedChunk = await translateBatchWithContext(
       chunk,
       targetLanguage,
@@ -150,7 +154,7 @@ export async function translateBatch(
       });
     }
 
-    await delay(300);
+    await delay(config.delayMs);
   }
 
   return results;
