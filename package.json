@@ -1,7 +1,7 @@
 {
   "name": "anime-subtitle-translator",
   "version": "1.0.0",
-  "description": "",
+  "description": "AI-powered anime subtitle translator supporting ASS and SRT formats",
   "main": "dist/main.js",
   "type": "commonjs",
   "scripts": {
@@ -9,9 +9,16 @@
     "start": "node --env-file .env dist/main.js",
     "check-types": "tsc --noEmit"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "anime",
+    "subtitle",
+    "translator",
+    "ASS",
+    "SRT",
+    "AI"
+  ],
+  "author": "denizozaltay",
+  "license": "GPL-3.0",
   "packageManager": "pnpm@10.27.0",
   "devDependencies": {
     "@types/node": "^25.0.5",
