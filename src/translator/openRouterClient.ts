@@ -1,6 +1,10 @@
 import axios from "axios";
 import { config } from "../config";
-import { withRetry, isValidTranslation, isValidBatchTranslation } from "../utils/retryHandler";
+import {
+  withRetry,
+  isValidTranslation,
+  isValidBatchTranslation,
+} from "../utils/retryHandler";
 
 interface ChatMessage {
   role: "system" | "user" | "assistant";

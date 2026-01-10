@@ -30,14 +30,22 @@ export async function withRetry<T>(
       }
 
       lastResult = result;
-      console.log(`  ⚠ Validation failed on attempt ${attempt}/${opts.maxRetries}`);
+      console.log(
+        `  ⚠ Validation failed on attempt ${attempt}/${opts.maxRetries}`
+      );
     } catch (error) {
       lastError = error as Error;
-      console.log(`  ⚠ Error on attempt ${attempt}/${opts.maxRetries}: ${lastError.message}`);
+      console.log(
+        `  ⚠ Error on attempt ${attempt}/${opts.maxRetries}: ${lastError.message}`
+      );
     }
 
     if (attempt < opts.maxRetries) {
-      const delayMs = calculateBackoff(attempt, opts.baseDelayMs, opts.maxDelayMs);
+      const delayMs = calculateBackoff(
+        attempt,
+        opts.baseDelayMs,
+        opts.maxDelayMs
+      );
       console.log(`  ⏳ Retrying in ${delayMs}ms...`);
       await delay(delayMs);
     }
@@ -51,7 +59,11 @@ export async function withRetry<T>(
   throw lastError || new Error("Retry failed with no result");
 }
 
-function calculateBackoff(attempt: number, baseMs: number, maxMs: number): number {
+function calculateBackoff(
+  attempt: number,
+  baseMs: number,
+  maxMs: number
+): number {
   const exponentialDelay = baseMs * Math.pow(2, attempt - 1);
   const jitter = Math.random() * 0.3 * exponentialDelay;
   return Math.min(exponentialDelay + jitter, maxMs);
@@ -73,7 +85,10 @@ export function isValidTranslation(text: string): boolean {
   return true;
 }
 
-export function isValidBatchTranslation(texts: string[], expectedCount: number): boolean {
+export function isValidBatchTranslation(
+  texts: string[],
+  expectedCount: number
+): boolean {
   if (texts.length !== expectedCount) {
     return false;
   }
