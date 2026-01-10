@@ -1,5 +1,7 @@
 # Anime Subtitle Translator
 
+[Türkçe](locales/README.tr.md)
+
 AI-powered anime subtitle translation tool. Supports `.ass` and `.srt` formats.
 
 ## Features
@@ -46,6 +48,10 @@ export const config = {
 ```
 
 ## Usage
+
+1. Place your subtitle file (`.ass` or `.srt`) in the project root directory
+2. Update `inputFile` and `outputFile` in `src/config.ts`
+3. Run:
 
 ```bash
 pnpm build

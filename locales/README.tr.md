@@ -47,6 +47,10 @@ export const config = {
 
 ## Kullanım
 
+1. Altyazı dosyanızı (`.ass` veya `.srt`) projenin ana dizinine koyun
+2. `src/config.ts` dosyasında `inputFile` ve `outputFile` değerlerini güncelleyin
+3. Çalıştırın:
+
 ```bash
 pnpm build
 pnpm start
