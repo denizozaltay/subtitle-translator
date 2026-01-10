@@ -1,5 +1,6 @@
 import axios from "axios";
 import { config } from "../config";
+import { withRetry, isValidTranslation, isValidBatchTranslation } from "../utils/retryHandler";
 
 interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -62,7 +63,15 @@ async function translateSingleWithContext(
   const systemPrompt = buildSystemPromptWithContext(targetLanguage);
   const userPrompt = buildSinglePromptWithContext(text, context);
 
-  return await callApi(systemPrompt, userPrompt);
+  return await withRetry(
+    () => callApi(systemPrompt, userPrompt),
+    isValidTranslation,
+    {
+      maxRetries: config.maxRetries,
+      baseDelayMs: config.retryBaseDelayMs,
+      maxDelayMs: config.retryMaxDelayMs,
+    }
+  );
 }
 
 async function translateBatchWithContext(
@@ -73,8 +82,18 @@ async function translateBatchWithContext(
   const systemPrompt = buildSystemPromptWithContext(targetLanguage);
   const userPrompt = buildBatchPromptWithContext(texts, context);
 
-  const content = await callApi(systemPrompt, userPrompt);
-  return parseBatchResponse(content, texts.length);
+  return await withRetry(
+    async () => {
+      const content = await callApi(systemPrompt, userPrompt);
+      return parseBatchResponse(content, texts.length);
+    },
+    (result) => isValidBatchTranslation(result, texts.length),
+    {
+      maxRetries: config.maxRetries,
+      baseDelayMs: config.retryBaseDelayMs,
+      maxDelayMs: config.retryMaxDelayMs,
+    }
+  );
 }
 
 export async function translateBatch(
@@ -180,8 +199,18 @@ async function reviseWarmupTranslations(
   const systemPrompt = buildRevisionSystemPrompt(targetLanguage);
   const userPrompt = buildRevisionUserPrompt(pairs);
 
-  const content = await callApi(systemPrompt, userPrompt);
-  const revisedTranslations = parseBatchResponse(content, pairs.length);
+  const revisedTranslations = await withRetry(
+    async () => {
+      const content = await callApi(systemPrompt, userPrompt);
+      return parseBatchResponse(content, pairs.length);
+    },
+    (result) => isValidBatchTranslation(result, pairs.length),
+    {
+      maxRetries: config.maxRetries,
+      baseDelayMs: config.retryBaseDelayMs,
+      maxDelayMs: config.retryMaxDelayMs,
+    }
+  );
 
   return pairs.map((pair, i) => ({
     original: pair.original,
