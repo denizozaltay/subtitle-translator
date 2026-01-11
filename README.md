@@ -1,8 +1,8 @@
-# Anime Subtitle Translator
+# Subtitle Translator
 
 [Türkçe](locales/README.tr.md)
 
-AI-powered anime subtitle translation tool. Supports `.ass` and `.srt` formats.
+AI-powered subtitle translation tool. Supports `.ass` and `.srt` formats.
 
 ## Features
 

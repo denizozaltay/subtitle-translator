@@ -223,12 +223,12 @@ async function reviseWarmupTranslations(
 }
 
 function buildRevisionSystemPrompt(targetLanguage: string): string {
-  return `You are a professional anime subtitle translator and editor. Review and revise translations to ${targetLanguage}.
+  return `You are a professional subtitle translator and editor. Review and revise translations to ${targetLanguage}.
 
 Your task:
 - Review each translation for accuracy, naturalness, and consistency
 - Fix any awkward phrasing, mistranslations, or inconsistencies
-- Ensure the tone matches anime dialogue style
+- Ensure the tone matches subtitle dialogue style
 - Preserve formatting codes: \\N (line break), {\\i1}, {\\i0}, {\\pos(x,y)}, and other ASS style tags
 - Keep character names unchanged
 - If a translation is already good, keep it as is
@@ -253,13 +253,13 @@ function buildRevisionUserPrompt(pairs: TranslationPair[]): string {
 }
 
 function buildSystemPromptWithContext(targetLanguage: string): string {
-  return `You are a professional anime subtitle translator. Translate subtitle lines to ${targetLanguage}.
+  return `You are a professional subtitle translator. Translate subtitle lines to ${targetLanguage}.
 
 Rules:
 - Translate naturally and fluently, maintaining consistency with previous translations
 - Preserve formatting codes: \\N (line break), {\\i1}, {\\i0}, {\\pos(x,y)}, and other ASS style tags
 - Keep character names unchanged unless they have official localized versions
-- Maintain the emotional tone and context of anime dialogue
+- Maintain the emotional tone and context of subtitle dialogue
 - If a line contains only formatting codes or is empty, return it unchanged
 - Use the provided context to maintain translation consistency (same terms, style, tone)`;
 }

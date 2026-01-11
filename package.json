@@ -1,7 +1,7 @@
 {
-  "name": "anime-subtitle-translator",
+  "name": "subtitle-translator",
   "version": "1.0.0",
-  "description": "AI-powered anime subtitle translator supporting ASS and SRT formats",
+  "description": "AI-powered subtitle translator supporting ASS and SRT formats",
   "main": "dist/main.js",
   "type": "commonjs",
   "scripts": {
@@ -10,7 +10,6 @@
     "check-types": "tsc --noEmit"
   },
   "keywords": [
-    "anime",
     "subtitle",
     "translator",
     "ASS",

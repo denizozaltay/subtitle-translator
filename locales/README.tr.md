@@ -1,6 +1,6 @@
-# Anime Altyazı Çevirici
+# Altyazı Çevirici
 
-AI destekli anime altyazı çeviri aracı. `.ass` ve `.srt` formatlarını destekler.
+AI destekli altyazı çeviri aracı. `.ass` ve `.srt` formatlarını destekler.
 
 ## Özellikler
 
