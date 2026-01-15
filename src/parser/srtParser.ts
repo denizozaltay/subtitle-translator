@@ -37,7 +37,8 @@ export function parseSrtFile(content: string): ParsedSubtitle {
 export function rebuildSrtFile(parsed: ParsedSubtitle): string {
   return parsed.entries
     .map((entry) => {
-      const text = entry.translatedText ?? entry.text;
+      let text = entry.translatedText ?? entry.text;
+      text = text.replace(/\\N/g, "\n");
       return `${entry.index}\n${entry.startTime} --> ${entry.endTime}\n${text}`;
     })
     .join("\n\n");
