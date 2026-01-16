@@ -52,6 +52,8 @@ async function callApi(
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
+        "HTTP-Referer": "https://github.com/denizozaltay/subtitle-translator",
+        "X-Title": "Subtitle Translator",
       },
     }
   );
