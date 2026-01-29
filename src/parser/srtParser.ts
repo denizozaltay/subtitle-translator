@@ -1,11 +1,11 @@
 import { ParsedSubtitle, SubtitleEntry } from "../types/subtitle";
 
 export function parseSrtFile(content: string): ParsedSubtitle {
-  const blocks = content.trim().split(/\n\n+/);
+  const blocks = content.trim().split(/\r?\n\r?\n+/);
   const entries: SubtitleEntry[] = [];
 
   for (const block of blocks) {
-    const lines = block.split("\n");
+    const lines = block.split(/\r?\n/);
     if (lines.length < 3) continue;
 
     const index = parseInt(lines[0], 10);
@@ -13,7 +13,7 @@ export function parseSrtFile(content: string): ParsedSubtitle {
 
     const timeLine = lines[1];
     const timeMatch = timeLine.match(
-      /(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})/
+      /(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})/,
     );
     if (!timeMatch) continue;
 
