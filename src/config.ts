@@ -3,11 +3,10 @@ export const config = {
   outputFile: "subtitle_tr.ass",
   targetLanguage: "Turkish",
 
-  warmupCount: 10,
-  batchSize: 10,
+  batchSize: 30,
   delayMs: 300,
 
-  maxRetries: 3,
+  maxRetries: 10,
   retryBaseDelayMs: 1000,
   retryMaxDelayMs: 10000,
 

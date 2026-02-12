@@ -15,7 +15,7 @@ const DEFAULT_OPTIONS: RetryOptions = {
 export async function withRetry<T>(
   operation: () => Promise<T>,
   validator: (result: T) => boolean,
-  options: Partial<RetryOptions> = {}
+  options: Partial<RetryOptions> = {},
 ): Promise<T> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   let lastError: Error | null = null;
@@ -31,12 +31,12 @@ export async function withRetry<T>(
 
       lastResult = result;
       console.log(
-        `  ⚠ Validation failed on attempt ${attempt}/${opts.maxRetries}`
+        `  ⚠ Validation failed on attempt ${attempt}/${opts.maxRetries}`,
       );
     } catch (error) {
       lastError = error as Error;
       console.log(
-        `  ⚠ Error on attempt ${attempt}/${opts.maxRetries}: ${lastError.message}`
+        `  ⚠ Error on attempt ${attempt}/${opts.maxRetries}: ${lastError.message}`,
       );
     }
 
@@ -44,7 +44,7 @@ export async function withRetry<T>(
       const delayMs = calculateBackoff(
         attempt,
         opts.baseDelayMs,
-        opts.maxDelayMs
+        opts.maxDelayMs,
       );
       console.log(`  ⏳ Retrying in ${delayMs}ms...`);
       await delay(delayMs);
@@ -62,7 +62,7 @@ export async function withRetry<T>(
 function calculateBackoff(
   attempt: number,
   baseMs: number,
-  maxMs: number
+  maxMs: number,
 ): number {
   const exponentialDelay = baseMs * Math.pow(2, attempt - 1);
   const jitter = Math.random() * 0.3 * exponentialDelay;
@@ -73,25 +73,13 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function isValidTranslation(text: string): boolean {
-  if (!text || text.trim() === "") {
-    return false;
-  }
-
-  if (text.includes("I cannot") || text.includes("I'm sorry")) {
-    return false;
-  }
-
-  return true;
-}
-
 export function isValidBatchTranslation(
   texts: string[],
-  expectedCount: number
+  expectedCount: number,
 ): boolean {
   if (texts.length !== expectedCount) {
     return false;
   }
 
-  return texts.every(isValidTranslation);
+  return texts.every((text) => text && text.trim() !== "");
 }

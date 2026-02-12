@@ -15,7 +15,21 @@ export interface ParsedSubtitle {
   metadata: string[];
 }
 
-export interface TranslationResult {
+export interface TranslationContext {
   original: string;
-  translated: string;
+  translation: string;
+}
+
+export interface TranslationSentence {
+  id: number;
+  text: string;
+}
+
+export interface TranslationRequest {
+  context: TranslationContext[];
+  sentences: TranslationSentence[];
+}
+
+export interface TranslationResponse {
+  translations: TranslationSentence[];
 }
