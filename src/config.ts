@@ -12,4 +12,7 @@ export const config = {
 
   model: "google/gemini-3-flash-preview",
   apiUrl: "https://openrouter.ai/api/v1/chat/completions",
+
+  inputTokenPrice: 0.1,
+  outputTokenPrice: 0.4,
 };

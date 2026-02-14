@@ -2,6 +2,12 @@ import axios from "axios";
 import { config } from "../config";
 import { withRetry, isValidBatchTranslation } from "../utils/retryHandler";
 import {
+  TokenUsage,
+  createEmptyUsage,
+  addUsage,
+  printUsageSummary,
+} from "../utils/tokenTracker";
+import {
   TranslationContext,
   TranslationRequest,
   TranslationResponse,
@@ -13,12 +19,33 @@ interface OpenRouterResponse {
       content: string;
     };
   }[];
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}
+
+interface ApiResult {
+  content: string;
+  usage: TokenUsage;
+}
+
+function extractUsage(response: OpenRouterResponse): TokenUsage {
+  if (!response.usage) {
+    return createEmptyUsage();
+  }
+
+  return {
+    inputTokens: response.usage.prompt_tokens,
+    outputTokens: response.usage.completion_tokens,
+  };
 }
 
 async function callApi(
   systemPrompt: string,
   userPrompt: string,
-): Promise<string> {
+): Promise<ApiResult> {
   const apiKey = process.env.OPENROUTER_API_KEY;
 
   if (!apiKey) {
@@ -34,7 +61,32 @@ async function callApi(
         { role: "user", content: userPrompt },
       ],
       reasoning: { enabled: true },
-      response_format: { type: "json_object" },
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "translation_response",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              translations: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "number", description: "Sentence ID" },
+                    text: { type: "string", description: "Translated text" },
+                  },
+                  required: ["id", "text"],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ["translations"],
+            additionalProperties: false,
+          },
+        },
+      },
     },
     {
       headers: {
@@ -46,10 +98,13 @@ async function callApi(
     },
   );
 
-  return response.data.choices[0].message.content.trim();
+  return {
+    content: response.data.choices[0].message.content.trim(),
+    usage: extractUsage(response.data),
+  };
 }
 
-function buildSystemPrompt(targetLanguage: string): string {
+export function buildSystemPrompt(targetLanguage: string): string {
   return `You are a professional subtitle translator. Translate subtitle lines to ${targetLanguage}.
 
 Rules:
@@ -58,21 +113,10 @@ Rules:
 - Keep character names unchanged unless they have official localized versions
 - Maintain the emotional tone and context of subtitle dialogue
 - If a line contains only formatting codes or is empty, return it unchanged
-- Use the provided context to maintain translation consistency (same terms, style, tone)
-
-You will receive a JSON object with "context" (previous translations) and "sentences" (lines to translate).
-Respond with a JSON object in this exact format:
-{
-  "translations": [
-    { "id": 1, "text": "translated text here" },
-    { "id": 2, "text": "translated text here" }
-  ]
+- Use the provided context to maintain translation consistency (same terms, style, tone)`;
 }
 
-Return ONLY valid JSON. No explanations, no extra text.`;
-}
-
-function buildUserPrompt(
+export function buildUserPrompt(
   texts: string[],
   context: TranslationContext[],
 ): string {
@@ -84,7 +128,10 @@ function buildUserPrompt(
   return JSON.stringify(request);
 }
 
-function parseJsonResponse(content: string, expectedCount: number): string[] {
+export function parseJsonResponse(
+  content: string,
+  expectedCount: number,
+): string[] {
   const parsed: TranslationResponse = JSON.parse(content);
 
   if (!parsed.translations || !Array.isArray(parsed.translations)) {
@@ -96,17 +143,24 @@ function parseJsonResponse(content: string, expectedCount: number): string[] {
   return sorted.map((item) => item.text).slice(0, expectedCount);
 }
 
+interface ChunkResult {
+  translations: string[];
+  usage: TokenUsage;
+}
+
 async function translateChunk(
   texts: string[],
   targetLanguage: string,
   context: TranslationContext[],
-): Promise<string[]> {
+): Promise<ChunkResult> {
   const systemPrompt = buildSystemPrompt(targetLanguage);
   const userPrompt = buildUserPrompt(texts, context);
+  const chunkUsage = createEmptyUsage();
 
-  return await withRetry(
+  const translations = await withRetry(
     async () => {
-      const content = await callApi(systemPrompt, userPrompt);
+      const { content, usage } = await callApi(systemPrompt, userPrompt);
+      addUsage(chunkUsage, usage);
       return parseJsonResponse(content, texts.length);
     },
     (result) => isValidBatchTranslation(result, texts.length),
@@ -116,6 +170,8 @@ async function translateChunk(
       maxDelayMs: config.retryMaxDelayMs,
     },
   );
+
+  return { translations, usage: chunkUsage };
 }
 
 export async function translateBatch(
@@ -124,6 +180,7 @@ export async function translateBatch(
 ): Promise<string[]> {
   const results: string[] = [];
   const history: TranslationContext[] = [];
+  const totalUsage = createEmptyUsage();
   const totalBatches = Math.ceil(texts.length / config.batchSize);
 
   console.log(
@@ -139,17 +196,25 @@ export async function translateBatch(
     );
 
     const context = history.slice(-config.batchSize);
-    const translated = await translateChunk(chunk, targetLanguage, context);
+    const { translations, usage } = await translateChunk(
+      chunk,
+      targetLanguage,
+      context,
+    );
+
+    addUsage(totalUsage, usage);
 
     for (let j = 0; j < chunk.length; j++) {
-      results.push(translated[j]);
-      history.push({ original: chunk[j], translation: translated[j] });
+      results.push(translations[j]);
+      history.push({ original: chunk[j], translation: translations[j] });
     }
 
     if (i + config.batchSize < texts.length) {
       await delay(config.delayMs);
     }
   }
+
+  printUsageSummary(totalUsage);
 
   return results;
 }

@@ -7,7 +7,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node --env-file .env dist/main.js",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "node --import tsx --test --test-isolation=none tests/**/*.test.ts"
   },
   "keywords": [
     "subtitle",
@@ -21,6 +22,7 @@
   "packageManager": "pnpm@10.27.0",
   "devDependencies": {
     "@types/node": "^25.0.5",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
