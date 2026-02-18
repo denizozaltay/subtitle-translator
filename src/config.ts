@@ -7,7 +7,7 @@ export const config = {
   batchSize: 10,
   delayMs: 300,
 
-  maxRetries: 3,
+  maxRetries: 10,
   retryBaseDelayMs: 1000,
   retryMaxDelayMs: 10000,
 
