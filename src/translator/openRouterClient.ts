@@ -26,9 +26,59 @@ interface TranslationPair {
   translated: string;
 }
 
+interface JsonSchema {
+  name: string;
+  strict: boolean;
+  schema: Record<string, unknown>;
+}
+
+interface SingleTranslationOutput {
+  translation: string;
+}
+
+interface BatchTranslationOutput {
+  translations: string[];
+}
+
+const SINGLE_TRANSLATION_SCHEMA: JsonSchema = {
+  name: "single_translation",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      translation: {
+        type: "string",
+        description: "The translated subtitle line",
+      },
+    },
+    required: ["translation"],
+    additionalProperties: false,
+  },
+};
+
+function createBatchTranslationSchema(count: number): JsonSchema {
+  return {
+    name: "batch_translation",
+    strict: true,
+    schema: {
+      type: "object",
+      properties: {
+        translations: {
+          type: "array",
+          items: { type: "string" },
+          description: `Array of exactly ${count} translated subtitle lines, in the same order as the input`,
+        },
+      },
+      required: ["translations"],
+      additionalProperties: false,
+    },
+  };
+}
+
 async function callApi(
   systemPrompt: string,
-  userPrompt: string
+  userPrompt: string,
+  jsonSchema: JsonSchema
 ): Promise<string> {
   const apiKey = process.env.OPENROUTER_API_KEY;
 
@@ -47,6 +97,10 @@ async function callApi(
       model: config.model,
       messages,
       reasoning: { enabled: true },
+      response_format: {
+        type: "json_schema",
+        json_schema: jsonSchema,
+      },
     },
     {
       headers: {
@@ -61,6 +115,25 @@ async function callApi(
   return response.data.choices[0].message.content.trim();
 }
 
+function parseSingleResponse(content: string): string {
+  const parsed: SingleTranslationOutput = JSON.parse(content);
+  return parsed.translation;
+}
+
+function parseBatchJsonResponse(
+  content: string,
+  expectedCount: number
+): string[] {
+  const parsed: BatchTranslationOutput = JSON.parse(content);
+  const results = parsed.translations;
+
+  while (results.length < expectedCount) {
+    results.push("");
+  }
+
+  return results.slice(0, expectedCount);
+}
+
 async function translateSingleWithContext(
   text: string,
   targetLanguage: string,
@@ -70,7 +143,14 @@ async function translateSingleWithContext(
   const userPrompt = buildSinglePromptWithContext(text, context);
 
   return await withRetry(
-    () => callApi(systemPrompt, userPrompt),
+    async () => {
+      const content = await callApi(
+        systemPrompt,
+        userPrompt,
+        SINGLE_TRANSLATION_SCHEMA
+      );
+      return parseSingleResponse(content);
+    },
     isValidTranslation,
     {
       maxRetries: config.maxRetries,
@@ -87,11 +167,12 @@ async function translateBatchWithContext(
 ): Promise<string[]> {
   const systemPrompt = buildSystemPromptWithContext(targetLanguage);
   const userPrompt = buildBatchPromptWithContext(texts, context);
+  const schema = createBatchTranslationSchema(texts.length);
 
   return await withRetry(
     async () => {
-      const content = await callApi(systemPrompt, userPrompt);
-      return parseBatchResponse(content, texts.length);
+      const content = await callApi(systemPrompt, userPrompt, schema);
+      return parseBatchJsonResponse(content, texts.length);
     },
     (result) => isValidBatchTranslation(result, texts.length),
     {
@@ -204,11 +285,12 @@ async function reviseWarmupTranslations(
 ): Promise<TranslationPair[]> {
   const systemPrompt = buildRevisionSystemPrompt(targetLanguage);
   const userPrompt = buildRevisionUserPrompt(pairs);
+  const schema = createBatchTranslationSchema(pairs.length);
 
   const revisedTranslations = await withRetry(
     async () => {
-      const content = await callApi(systemPrompt, userPrompt);
-      return parseBatchResponse(content, pairs.length);
+      const content = await callApi(systemPrompt, userPrompt, schema);
+      return parseBatchJsonResponse(content, pairs.length);
     },
     (result) => isValidBatchTranslation(result, pairs.length),
     {
@@ -235,10 +317,7 @@ Your task:
 - Keep character names unchanged
 - If a translation is already good, keep it as is
 
-Output format:
-- Return ONLY the revised translations, one per line
-- Each output line corresponds to the input line with the same number
-- Do not include line numbers, explanations, or any extra text`;
+Respond with a JSON object containing a "translations" array with the revised translations in order.`;
 }
 
 function buildRevisionUserPrompt(pairs: TranslationPair[]): string {
@@ -263,7 +342,9 @@ Rules:
 - Keep character names unchanged unless they have official localized versions
 - Maintain the emotional tone and context of subtitle dialogue
 - If a line contains only formatting codes or is empty, return it unchanged
-- Use the provided context to maintain translation consistency (same terms, style, tone)`;
+- Use the provided context to maintain translation consistency (same terms, style, tone)
+
+Respond with a JSON object as specified by the schema.`;
 }
 
 function buildSinglePromptWithContext(
@@ -280,7 +361,7 @@ function buildSinglePromptWithContext(
     )
     .join("\n\n");
 
-  return `Previous translations for context:\n${contextStr}\n\nNow translate this line (return ONLY the translation, no explanations):\n${text}`;
+  return `Previous translations for context:\n${contextStr}\n\nNow translate this line:\n${text}`;
 }
 
 function buildBatchPromptWithContext(
@@ -295,25 +376,7 @@ function buildBatchPromptWithContext(
 
   const numbered = texts.map((text, i) => `${i + 1}. ${text}`).join("\n");
 
-  return `Previous translations for context:\n${contextStr}\n\nNow translate these ${texts.length} lines. Return ONLY the translations, one per line, no line numbers:\n\n${numbered}`;
-}
-
-function parseBatchResponse(content: string, expectedCount: number): string[] {
-  const lines = content.split("\n").filter((line) => line.trim() !== "");
-  const results: string[] = [];
-
-  for (const line of lines) {
-    const cleaned = line.replace(/^\d+\.\s*/, "").trim();
-    if (cleaned) {
-      results.push(cleaned);
-    }
-  }
-
-  while (results.length < expectedCount) {
-    results.push("");
-  }
-
-  return results.slice(0, expectedCount);
+  return `Previous translations for context:\n${contextStr}\n\nTranslate these ${texts.length} lines. Return them in the same order:\n\n${numbered}`;
 }
 
 function delay(ms: number): Promise<void> {
