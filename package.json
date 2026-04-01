@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node --env-file .env dist/main.js",
-    "check-types": "tsc --noEmit"
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "subtitle",
@@ -18,12 +18,12 @@
   ],
   "author": "denizozaltay",
   "license": "GPL-3.0",
-  "packageManager": "pnpm@10.27.0",
+  "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319",
   "devDependencies": {
-    "@types/node": "^25.0.5",
+    "@types/node": "^24.12.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "axios": "^1.13.2"
+    "axios": "^1.14.0"
   }
 }
