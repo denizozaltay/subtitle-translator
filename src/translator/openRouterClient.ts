@@ -176,14 +176,22 @@ function validateAndExtract(
       );
     }
 
-    translations.push(received.translated);
+    translations.push(restoreAssLineBreaks(received.translated));
   }
 
   return translations;
 }
 
 function normalize(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
+  return text
+    .replace(/\\N/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function restoreAssLineBreaks(text: string): string {
+  return text.replace(/\n/g, "\\N");
 }
 
 // --- Core Translation Functions ---
