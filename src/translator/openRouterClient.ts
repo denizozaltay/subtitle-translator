@@ -11,7 +11,29 @@ interface ChatMessage {
 
 interface OpenRouterResponse {
   choices: { message: { content: string } }[];
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    cost?: number;
+  };
 }
+
+interface UsageStats {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  totalCost: number;
+  apiCalls: number;
+}
+
+const usageStats: UsageStats = {
+  promptTokens: 0,
+  completionTokens: 0,
+  totalTokens: 0,
+  totalCost: 0,
+  apiCalls: 0,
+};
 
 interface ContextItem {
   id: number;
@@ -107,6 +129,14 @@ async function callApi(
       },
     }
   );
+
+  if (response.data.usage) {
+    usageStats.promptTokens += response.data.usage.prompt_tokens;
+    usageStats.completionTokens += response.data.usage.completion_tokens;
+    usageStats.totalTokens += response.data.usage.total_tokens;
+    usageStats.totalCost += response.data.usage.cost ?? 0;
+  }
+  usageStats.apiCalls++;
 
   return response.data.choices[0].message.content.trim();
 }
@@ -265,6 +295,7 @@ export async function translateBatch(
   }
 
   if (texts.length <= warmupCount) {
+    printUsageSummary();
     return results;
   }
 
@@ -309,6 +340,7 @@ export async function translateBatch(
     await delay(config.delayMs);
   }
 
+  printUsageSummary();
   return results;
 }
 
@@ -346,6 +378,16 @@ Your task:
 You will receive a JSON object with "to_revise" containing lines with their current translations.
 
 Respond with a JSON object containing a "translations" array. Each item must include the exact "id" and "original" from the input, plus the revised "translated" text.`;
+}
+
+function printUsageSummary(): void {
+  console.log("\n=== Token Usage Summary ===");
+  console.log(`  API Calls:        ${usageStats.apiCalls}`);
+  console.log(`  Input Tokens:     ${usageStats.promptTokens.toLocaleString()}`);
+  console.log(`  Output Tokens:    ${usageStats.completionTokens.toLocaleString()}`);
+  console.log(`  Total Tokens:     ${usageStats.totalTokens.toLocaleString()}`);
+  console.log(`  Total Cost:       $${usageStats.totalCost.toFixed(6)}`);
+  console.log("===========================");
 }
 
 function delay(ms: number): Promise<void> {
