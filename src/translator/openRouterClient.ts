@@ -169,10 +169,9 @@ function validateAndExtract(
     }
 
     if (normalize(received.original) !== normalize(expected.original)) {
-      console.warn(
-        `  ⚠ Original text mismatch for id ${expected.id}:\n` +
-          `    Expected: "${expected.original}"\n` +
-          `    Got:      "${received.original}"`
+      throw new Error(
+        `Original text mismatch for id ${expected.id}: ` +
+          `expected "${expected.original}", got "${received.original}"`
       );
     }
 
