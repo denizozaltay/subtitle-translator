@@ -191,7 +191,9 @@ function normalize(text: string): string {
 }
 
 function restoreAssLineBreaks(text: string): string {
-  return text.replace(/\n/g, "\\N");
+  return text
+    .replace(/\n/g, "\\N")
+    .replace(/\\n/g, "\\N");
 }
 
 // --- Core Translation Functions ---
